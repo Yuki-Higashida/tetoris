@@ -11,12 +11,15 @@
 #include "Mino.h"
 #include "Game.h"
 
+int x;      //ミノのX座標
+int y;      //ミノのY座標
+
 int main()
 {
-    //変数宣言
     char currentDirectory[CHARBUFF];
     char mino_name[MINO_TYPE][CHARBUFF] = { "Iミノ","Oミノ","Sミノ","Zミノ","Jミノ","Lミノ","Tミノ" };
     Game tetoris;
+    int i, j;
 
     //現在のディレクトリを取得する
     getCurrentDirectory(currentDirectory);
@@ -26,12 +29,66 @@ int main()
     readChar("tetoris", "difficulty_level", "none", tetoris.dif_level, currentDirectory);
 
     //難易度設定
-    setDifficulty(tetoris);
+    setDifficulty(&tetoris);
+
+    //描画開始
+    //端末の準備
+    initscr();
+
+    //画面の幅と高さを取得
+    int width, height;
+    getmaxyx(stdscr, height, width);
+
+    //色の準備
+    start_color();
+
+    //カラーペアの登録
+    init_pair(1, COLOR_BLACK, COLOR_CYAN);     //Iミノのカラーペア
+    init_pair(2, COLOR_BLACK, COLOR_YELLOW);   //Oミノのカラーペア
+    init_pair(3, COLOR_BLACK, COLOR_GREEN);    //Sミノのカラーペア
+    init_pair(4, COLOR_BLACK, COLOR_RED);      //Zミノのカラーペア
+    init_pair(5, COLOR_BLACK, COLOR_BLUE);     //J,Lミノのカラーペア
+    init_pair(6, COLOR_BLACK, COLOR_MAGENTA);  //Tミノのカラーペア
+    init_pair(7, COLOR_BLACK, COLOR_WHITE);    //ゲーム画面枠、文字の色
+    init_pair(8, COLOR_BLACK, COLOR_BLACK);    //背景色
+    bkgd(COLOR_PAIR(8));
+
+    //キー操作の取得
+    int key;
+
+    noecho();
+    cbreak();
+    keypad(stdscr, TRUE);
+
+    //ゲーム画面枠の描画
+    attrset(COLOR_PAIR(7));
+    makeFrame(height, width);
+    
+
+    //プレイヤー名、難易度を描画
+    attrset(COLOR_PAIR(7) | A_REVERSE);
+    mvaddstr(Ini_data_Y, Ini_data_X-13, "Player Name: ");
+    mvaddstr(Ini_data_Y, Ini_data_X, tetoris.plar_name);
+    mvaddstr(Ini_data_Y+1, Ini_data_X-18, "Difficulty Level: ");
+    mvaddstr(Ini_data_Y+1, Ini_data_X, tetoris.dif_level);
+    
+
+
+    
+
+    while (1) {
+        key = getch();
+        if (key == 'q') {
+            break;
+        }
+        
+    }
+    
 
 
 
-
-
+    //端末制御の終了
+    endwin();
 
     //ファイル出力
     outputResult("output.txt", tetoris);
@@ -61,15 +118,64 @@ bool readChar(const char* section, const char* keyword, const char* defaultValue
 }
 
 //難易度による設定
-void setDifficulty(Game data) {
+void setDifficulty(Game *data) {
+    //easyでは1.5秒に1マス落ちる
+    if (strcmp(data->dif_level, easy) == 0) {
+        data->fall_speed = 1.5;
+        data->Zmino_num = 8;
+    }
+    //normalでは1秒に1マス落ちる
+    else if (strcmp(data->dif_level, normal) == 0) {
+        data->fall_speed = 1;
+        data->Imino_num = 0;
+        data->Zmino_num = 9;
+    }
+    //hardでは0.5秒に1マス落ちる
+    else if (strcmp(data->dif_level, hard) == 0) {
+        data->fall_speed = 0.5;
+        data->Imino_num = 8;
+    }
+    
+}
 
+//ゲーム画面枠の描画
+void makeFrame(int height, int width) {
+    int i, j;
+    //ゲーム画面枠、次のミノを表示する箱の描画
+    for (i = 0;i < width;i++) {
+        for (j = 0;j < height;j++) {
+            if (i == Frame_leftX) {
+                mvaddstr(j, i, "   ");
+            }
+            else if (i == Frame_rightX - Frame_border) {
+                mvaddstr(j, i, "   ");
+            }
+            else if ((j < Frame_upY) && (Frame_leftX <= i) && (i < Frame_rightX)) {
+                mvaddstr(j, i, " ");
+            }
+            else if ((Frame_downY <= j) && (Frame_leftX <= i) && (i < Frame_rightX)) {
+                mvaddstr(j, i, " ");
+            }
+            else if ((i == Next_frame_leftX) && (Next_frame_upY <= j) && (j <= Next_frame_downY)) {
+                mvaddstr(j, i, " ");
+            }
+            else if ((i == Next_frame_rightX) && (Next_frame_upY <= j) && (j <= Next_frame_downY)) {
+                mvaddstr(j, i, " ");
+            }
+            else if ((j == Next_frame_upY) && (Next_frame_leftX <= i) && (i <= Next_frame_rightX)) {
+                mvaddstr(j, i, " ");
+            }
+            else if ((j == Next_frame_downY) && (Next_frame_leftX <= i) && (i <= Next_frame_rightX)) {
+                mvaddstr(j, i, " ");
+            }
+        }
+    }
 }
 
 //ファイルの出力
 void outputResult(const char* fileName,Game data) {
     FILE* fp;
     errno_t error;
-    int i;
 
     error = fopen_s(&fp, fileName, "w");
     if (error != 0) {
