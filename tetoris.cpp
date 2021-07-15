@@ -5,19 +5,21 @@
 #include <curses.h>
 #include <string.h>
 #include <windows.h>
-#include <stdlib.h>
 #include <time.h>
+#include <stdlib.h>
 #include "Setting.h"
 #include "Game.h"
 #include "Mino.h"
 
-int pos_x = START_X;          //ミノのX座標
-int pos_y = START_Y;         //ミノのY座標
-int stopFlag = 0;    //ミノの静止フラグ
-int exitFlag = 0;
-int key;             //取得したキーの格納
-int ope_color;           //操作するミノの色
-int next_color;          //次のミノの色
+int pos_x = START_X;                          //ミノのX座標
+int pos_y = START_Y;                          //ミノのY座標
+int g_x, g_y;                                 //ゲーム画面枠内での座標
+int exitFlag = 0;                             //ゲーム終了フラグ
+int key;                                      //取得したキーの格納
+int ope_color;                                //操作するミノの色
+int next_color;                               //次のミノの色
+int mino_id;                                  //操作するミノのID
+int next_mino_id;                             //次のミノのID
 int game_field[FRAME_HEIGHT][FRAME_WIDTH];    //ゲームフィールド
 int operate_mino[MINO_HEIGHT][MINO_WIDTH];    //操作するミノ
 int next_mino[MINO_HEIGHT][MINO_WIDTH];       //次のミノ
@@ -81,14 +83,11 @@ struct Mino minos[MINO_TYPE] = {
     }
 };
 
-void debug();
-void debug1();
-
-int main()
+int main() 
 {
     char currentDirectory[CHARBUFF];
     char mino_name[MINO_TYPE][CHARBUFF] = { "Iミノ","Oミノ","Sミノ","Zミノ","Jミノ","Lミノ","Tミノ" };
-    Game tetoris;
+    Game tetoris = { {""},{""},{0},{0},{0},{0},{0},{0}, };
     int i, j;
 
     //現在のディレクトリを取得する
@@ -97,9 +96,6 @@ int main()
     //設定ファイルから値を読み込む
     readChar("tetoris", "playername", "none", tetoris.plar_name, currentDirectory);
     readChar("tetoris", "difficulty_level", "none", tetoris.dif_level, currentDirectory);
-
-    //難易度設定
-    setDifficulty(&tetoris);
 
     //描画開始
     //端末の準備
@@ -160,8 +156,15 @@ int main()
 
     //ゲーム開始
     while (1) {
+        //新たなミノを作れるか終了判定
+        if (!isCreatable(next_mino)) {
+            break;
+        }
+        refresh();
+
         //次に落下するミノからミノを取り出し開始位置に描画
         updateOperateMino();
+        updateMinoData(&tetoris);
         drawMino(pos_y, pos_x, operate_mino, ope_color, TO_OPERATE_MINO);
 
         //次に落下するミノに表示していたミノを消す
@@ -170,16 +173,22 @@ int main()
         //ランダムにミノを生成し次に落下するミノに追加
         makeMino(tetoris);
         drawMino(NEXT_BOX_UP_Y + 2, NEXT_BOX_LEFT_X + 2, next_mino, next_color, TO_NEXT_MINO);
-;
+
         //ミノの操作
         //接地判定により操作終了
-        while (isMoveable(pos_y, pos_x, operate_mino, DOWN_MOVE)) {
+        while(isMoveable(pos_y, pos_x, operate_mino, DOWN_MOVE)) {
+            //終了条件
             if (exitFlag) {
                 break;
             }
-            
+
+            //1マス落下
+            fallMino();
+
+            //キー取得
             key = getch();
 
+            //ミノの操作
             switch (key)
             {
             case KEY_LEFT:
@@ -195,12 +204,11 @@ int main()
             case KEY_DOWN:
                 if (isMoveable(pos_y, pos_x, operate_mino, DOWN_MOVE)) {
                     moveMino(operate_mino, DOWN_MOVE);
-                    debug();
                 }
                 break;
             case ' ':
                 if (isMoveable(pos_y, pos_x, operate_mino, ROLL_MOVE)) {
-                    rollMino(operate_mino);
+                    rollMino(pos_y, pos_x, operate_mino);
                 }
                 break;
             case 'q':
@@ -209,23 +217,39 @@ int main()
             default:
                 break;
             }
-            
+            refresh();
         }
+
+        //行の削除判定
+        while (isDeletable()) {
+            slideRow(deleteRow(&tetoris));
+        }
+
+
+        //終了判定
         if (exitFlag) {
             break;
         }
-
-        fprintf_s(stdout, "yo");
-        
 
         //値の初期化
         pos_x = START_X;
         pos_y = START_Y;
         
     }
-    
 
+    //終了画面表示
+    erase();
+    attrset(COLOR_PAIR(7));
+    mvaddstr(height / 2, 54, "Game Over!");
+    mvaddstr(height / 2 + 1, 50, "Push Q button to quit");
 
+    //終了判定
+    while (1) {
+        key = getch();
+        if (key == 'q') {
+            break;
+        }
+    }
 
     //端末制御の終了
     endwin();
@@ -234,26 +258,6 @@ int main()
     outputResult("output.txt", tetoris);
 
     return 0;
-}
-
-void debug() {
-    int i, j;
-    for (i = 0;i < FRAME_HEIGHT;i++) {
-        for (j = 0;j < FRAME_WIDTH;j++) {
-            fprintf_s(stdout, "%d,", game_field[i][j]);
-        }
-        fprintf_s(stdout, "\n");
-    }
-}
-
-void debug1() {
-    int i, j;
-    for (i = 0;i < MINO_HEIGHT;i++) {
-        for (j = 0;j < MINO_WIDTH;j++) {
-            fprintf_s(stdout, "%d,", next_mino[i][j]);
-        }
-        fprintf_s(stdout, "\n");
-    }
 }
 
 //ファイルのディレクトリ取得
@@ -275,27 +279,6 @@ bool readChar(const char* section, const char* keyword, const char* defaultValue
     }
 
     return 0;
-}
-
-//難易度による設定
-void setDifficulty(Game *data) {
-    //easyでは1.5秒に1マス落ちる
-    if (strcmp(data->dif_level, EASY) == 0) {
-        data->fall_speed = 1.5;
-        data->Zmino_num = 8;
-    }
-    //normalでは1秒に1マス落ちる
-    else if (strcmp(data->dif_level, NORMAL) == 0) {
-        data->fall_speed = 1;
-        data->Imino_num = 0;
-        data->Zmino_num = 9;
-    }
-//hardでは0.5秒に1マス落ちる
-    else if (strcmp(data->dif_level, HARD) == 0) {
-    data->fall_speed = 0.5;
-    data->Imino_num = 8;
-    }
-
 }
 
 //ゲーム画面枠の描画
@@ -333,28 +316,60 @@ void makeFrame(int height, int width) {
     }
 }
 
+//消去したミノの数を更新
+void updateMinoData(Game* data) {
+    //作成したmino_idから対応するミノのカウントを増やす
+    switch (mino_id)
+    {
+    case 0:
+        data->Imino_cnt++;
+        break;
+    case 1:
+        data->Omino_cnt++;
+        break;
+    case 2:
+        data->Smino_cnt++;
+        break;
+    case 3:
+        data->Zmino_cnt++;
+        break;
+    case 4:
+        data->Jmino_cnt++;
+        break;
+    case 5:
+        data->Lmino_cnt++;
+        break;
+    case 6:
+        data->Tmino_cnt++;
+        break;
+    default:
+        break;
+    }
+}
+
 //移動先の座標にミノが動けるか接地判定
 int isMoveable(int y, int x, int mino[MINO_HEIGHT][MINO_WIDTH], int move) {
     int i, j;
-    int result = 1;
-    int g_y, g_x;
-    int has_block_row, has_block_line;
+    int result = 1;  //結果
+    int g_y, g_x;    //ゲーム画面内の相対座標
+    int edge_row;    //左、右端の列
 
+    //動きによって移動先が変わる
     switch (move)
     {
     case LEFT_MOVE:
         for (i = 0;i < MINO_WIDTH;i++) {
             for (j = 0;j < MINO_HEIGHT;j++) {
                 if (mino[j][i] != 0) {
-                    has_block_row = i;
+                    edge_row = i;
                     i = MINO_WIDTH;
                 }
             }
         }
-        g_x = has_block_row + (x - FRAME_BORDER - FRAME_LEFT_X) / 2;
+        g_x = edge_row + (x - FRAME_IN_LEFT_X) / 2;
         for (i = 0;i < MINO_HEIGHT;i++) {
             g_y = i + y - FRAME_UP_Y;
-            if (mino[i][has_block_row] != 0) {
+            if (mino[i][edge_row] != 0) {
                 if (g_x == 0) {
                     result = 0;
                 }
@@ -370,14 +385,14 @@ int isMoveable(int y, int x, int mino[MINO_HEIGHT][MINO_WIDTH], int move) {
         for (i = 0;i < MINO_WIDTH;i++) {
             for (j = 0;j < MINO_HEIGHT;j++) {
                 if (mino[j][i] != 0) {
-                    has_block_row = i;
+                    edge_row = i;
                 }
             }
         }
-        g_x = has_block_row + (x - FRAME_BORDER - FRAME_LEFT_X) / 2;
+        g_x = edge_row + (x - FRAME_IN_LEFT_X) / 2;
         for (i = 0;i < MINO_HEIGHT;i++) {
             g_y = i + y - FRAME_UP_Y;
-            if (mino[i][has_block_row] != 0) {
+            if (mino[i][edge_row] != 0) {
                 if (g_x == FRAME_WIDTH - 1) {
                     result = 0;
                 }
@@ -390,17 +405,16 @@ int isMoveable(int y, int x, int mino[MINO_HEIGHT][MINO_WIDTH], int move) {
         }
         break;
     case DOWN_MOVE:
-    case AUTO_DOWN_MOVE:
         for (i = 0;i < MINO_HEIGHT;i++) {
             g_y = i + y - FRAME_UP_Y;
             for (j = 0;j < MINO_WIDTH;j++) {
-                g_x = j + (x - FRAME_BORDER - FRAME_LEFT_X) / 2;
+                g_x = j + (x - FRAME_IN_LEFT_X) / 2;
                 if (mino[i][j] != 0) {
                     if (g_y == FRAME_HEIGHT - 1) {
                         result = 0;
                     }
                     else {
-                        if (i < MINO_HEIGHT - 1) {
+                        if (i != MINO_HEIGHT - 1) {
                             if (mino[i + 1][j] == 0) {
                                 if (game_field[g_y + 1][g_x] != 0) {
                                     result = 0;
@@ -419,11 +433,66 @@ int isMoveable(int y, int x, int mino[MINO_HEIGHT][MINO_WIDTH], int move) {
         }
         break;
     case ROLL_MOVE:
+        int after_mino[MINO_HEIGHT][MINO_WIDTH];
 
+        for (i = 0;i < MINO_HEIGHT;i++) {
+            for (j = 0;j < MINO_WIDTH;j++) {
+                after_mino[i][j] = mino[i][j];
+            }
+        }
+
+        for (i = 0;i < MINO_HEIGHT;i++) {
+            for (j = 0;j < MINO_WIDTH;j++) {
+                after_mino[i][j] = mino[j][3 - i];
+            }
+        }
+
+        for (i = 0;i < MINO_HEIGHT;i++) {
+            g_y = i + y - FRAME_UP_Y;
+            for (j = 0;j < MINO_WIDTH;j++) {
+                g_x = j + (x - FRAME_IN_LEFT_X) / 2;
+                if (mino[i][j] == 0) {
+                    if (after_mino[i][j] != 0) {
+                        if (g_x >= FRAME_WIDTH) {
+                            result = 0;
+                        }
+                        else if (g_x <= 0) {
+                            result = 0;
+                        }
+                        else {
+                            if (game_field[g_y][g_x] != 0) {
+                                result = 0;
+                            }
+                        }
+                    }
+                }
+            }
+        }
         break;
     default:
         break;
     }
+    return result;
+}
+
+//新たなミノを作れるか終了判定
+int isCreatable(int mino[MINO_HEIGHT][MINO_WIDTH]) {
+    int i, j;
+    int g_y, g_x;      //ゲーム画面内の相対座標
+    int result = 1;    //結果
+    
+    for (i = 0;i < MINO_HEIGHT;i++) {
+        g_y = i + START_Y - FRAME_UP_Y;
+        for (j = 0;j < MINO_WIDTH;j++) {
+            g_x = j + (START_X - FRAME_IN_LEFT_X) / 2;
+            if (mino[i][j] != 0) {
+                if (game_field[g_y][g_x] != 0) {
+                    result = 0;
+                }
+            }
+        }
+    }
+
     return result;
 }
 
@@ -435,14 +504,14 @@ void drawBlock(int y, int x) {
 //ミノの描画
 void drawMino(int y, int x, int mino[MINO_HEIGHT][MINO_WIDTH], int color, int to_mino) {
     int i, j;
-    int g_y, g_x;
+    int g_y, g_x;  //ゲーム画面内の相対座標
 
     attrset(COLOR_PAIR(color));
     for (i = 0;i < MINO_HEIGHT;i++) {
         g_y = i + y - FRAME_UP_Y;
         for (j = 0;j < MINO_WIDTH;j++) {
-            g_x = j + (x - FRAME_BORDER - FRAME_LEFT_X) / 2;
-            if (mino[i][j] > 0) {
+            g_x = j + (x - FRAME_IN_LEFT_X) / 2;
+            if (mino[i][j] != 0) {
                 drawBlock(i + y, j * 2 + x);
                 if (to_mino == TO_OPERATE_MINO) {
                     game_field[g_y][g_x] = mino[i][j];
@@ -455,14 +524,14 @@ void drawMino(int y, int x, int mino[MINO_HEIGHT][MINO_WIDTH], int color, int to
 //ミノを画面から消去
 void deleteMino(int y, int x, int mino[MINO_HEIGHT][MINO_WIDTH], int to_mino) {
     int i, j;
-    int g_y, g_x;
+    int g_y, g_x;  //ゲーム画面内の相対座標
 
     attrset(COLOR_PAIR(8));
     for (i = 0;i < MINO_HEIGHT;i++) {
         g_y = i + y - FRAME_UP_Y;
         for (j = 0;j < MINO_WIDTH;j++) {
-            g_x = j + (x - FRAME_BORDER - FRAME_LEFT_X) / 2;
-            if (mino[i][j] > 0) {
+            g_x = j + (x - FRAME_IN_LEFT_X) / 2;
+            if (mino[i][j] != 0) {
                 drawBlock(i + y, j * 2 + x);
                 if (to_mino == TO_OPERATE_MINO) {
                     game_field[g_y][g_x] = 0;
@@ -481,6 +550,7 @@ void makeMino(Game data) {
     int color_num = 0;
     int i, j;
 
+    //乱数生成
     for (i = 0;i < 10;i++) {
         randMino = rand() % 10;
     }
@@ -504,7 +574,8 @@ void makeMino(Game data) {
     default:
         break;
     }
-
+    
+    //難易度による出現確率の変化
     if (strcmp(data.dif_level, EASY) == 0) {
         switch (randMino)
         {
@@ -558,6 +629,8 @@ void makeMino(Game data) {
         }
     }
     next_color = minos[mino_num].color_num;
+    next_mino_id = mino_num;
+    
 }
 
 //次のミノから操作するミノを取り出して更新
@@ -565,6 +638,7 @@ void updateOperateMino() {
     int i, j;
 
     ope_color = next_color;
+    mino_id = next_mino_id;
 
     for (i = 0;i < MINO_HEIGHT;i++) {
         for (j = 0;j < MINO_WIDTH;j++) {
@@ -592,19 +666,106 @@ void moveMino(int mino[MINO_HEIGHT][MINO_WIDTH], int move) {
         pos_y++;
         drawMino(pos_y, pos_x, operate_mino, ope_color, TO_OPERATE_MINO);
         break;
-    case AUTO_DOWN_MOVE:
-        deleteMino(pos_y, pos_x, operate_mino, TO_OPERATE_MINO);
-        pos_y++;
-        drawMino(pos_y, pos_x, operate_mino, ope_color, TO_OPERATE_MINO);
-        break;
     default:
         break;
     }
 }
 
 //ミノの回転
-void rollMino(int mino[MINO_HEIGHT][MINO_WIDTH]) {
+void rollMino(int y, int x, int mino[MINO_HEIGHT][MINO_WIDTH]) {
+    int i, j;
+    int pre_mino[MINO_HEIGHT][MINO_WIDTH];
 
+    for (i = 0;i < MINO_HEIGHT;i++) {
+        for (j = 0;j < MINO_WIDTH;j++) {
+            pre_mino[i][j] = mino[i][j];
+        }
+    }
+
+    for (i = 0;i < MINO_HEIGHT;i++) {
+        for (j = 0;j < MINO_WIDTH;j++) {
+            mino[i][j] = pre_mino[j][3 - i];
+        }
+    }
+
+    deleteMino(pos_y, pos_x, pre_mino, TO_OPERATE_MINO);
+    drawMino(pos_y, pos_x, mino, ope_color, TO_OPERATE_MINO);
+}
+
+//削除する行があるか判定
+int isDeletable() {
+    int i, j;
+    int del_cnt;
+
+    for (i = FRAME_HEIGHT;i >= 0;i--) {
+        del_cnt = 0;
+        for (j = 0;j < FRAME_WIDTH;j++) {
+            if (game_field[i][j] != 0) {
+                del_cnt++;
+            }
+        }
+        if (del_cnt == FRAME_WIDTH) {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+//埋まった行の削除
+int deleteRow(Game *data) {
+    int i, j;
+    int delete_row;
+    int del_cnt;
+
+    for (i = FRAME_HEIGHT;i >= 0;i--) {
+        del_cnt = 0;
+        for (j = 0;j < FRAME_WIDTH;j++) {
+            if (game_field[i][j] != 0) {
+                del_cnt++;
+            }
+        }
+        if (del_cnt == FRAME_WIDTH) {
+            delete_row = i;
+            data->result_row++;
+            break;
+        }
+    }
+
+    attrset(COLOR_PAIR(8));
+    for (i = 0;i < FRAME_WIDTH;i++) {
+        game_field[delete_row][i] = 0;
+        drawBlock(delete_row + FRAME_UP_Y, i * 2 + FRAME_IN_LEFT_X);
+    }
+
+    return delete_row;
+}
+
+//行を削除した後全体を1行下げる
+void slideRow(int row_num) {
+    int i, j;
+    int tmp[FRAME_WIDTH];
+
+    for (i = row_num - 1;i >= 0;i--) {
+        for (j = 0;j < FRAME_WIDTH;j++) {
+            game_field[i + 1][j] = game_field[i][j];
+            attrset(COLOR_PAIR(game_field[i][j]));
+            drawBlock(i + 1 + FRAME_UP_Y, j * 2 + FRAME_IN_LEFT_X);
+            attrset(COLOR_PAIR(8));
+            drawBlock(i + FRAME_UP_Y, j * 2 + FRAME_IN_LEFT_X);
+        }
+    }
+}
+
+//ミノを自由落下させる
+void fallMino() {
+    int i;
+
+    for (i = 0;i < 100;i++) {
+        
+    }
+
+    moveMino(operate_mino, DOWN_MOVE);
 }
 
 //ファイルの出力
