@@ -13,13 +13,14 @@
 #define TMINO_NUM 7               //Tミノの出現番号
 
 //ゲーム画面枠の端座標
-#define FRAME_BORDER 3            //ゲーム画面の枠の太さ
-#define FRAME_WIDTH 10            //ゲーム画面の幅
-#define FRAME_LEFT_X 44           //ゲーム画面枠の左端 
-#define FRAME_RIGHT_X 70          //ゲーム画面の右端
-#define FRAME_HEIGHT 20           //ゲーム画面の高さ
-#define FRAME_UP_Y 5              //ゲーム画面の上端
-#define FRAME_DOWN_Y 25           //ゲーム画面の下端
+#define FRAME_BORDER 3                              //ゲーム画面の枠の太さ
+#define FRAME_WIDTH 10                              //ゲーム画面の幅
+#define FRAME_LEFT_X 44                             //ゲーム画面枠の左端 
+#define FRAME_IN_LEFT_X (FRAME_BORDER+FRAME_LEFT_X) //ゲーム画面枠内の左端
+#define FRAME_RIGHT_X 70                            //ゲーム画面の右端
+#define FRAME_HEIGHT 20                             //ゲーム画面の高さ
+#define FRAME_UP_Y 5                                //ゲーム画面の上端
+#define FRAME_DOWN_Y 25                             //ゲーム画面の下端
 
 //次のミノを表示する枠の端座標
 #define NEXT_BOX_LEFT_X 70        //次のミノを表示する箱の左端
@@ -43,17 +44,13 @@
 #define LEFT_MOVE 0               //左への移動
 #define RIGHT_MOVE 1              //右への移動
 #define DOWN_MOVE 2               //下への移動
-#define AUTO_DOWN_MOVE 3          //自由落下の移動
-#define ROLL_MOVE 4               //回転
+#define ROLL_MOVE 3               //回転
 
 
 //ゲーム進行、結果に必要なデータの格納
 struct Game {
 	char plar_name[CHARBUFF];    //プレイヤーの名前
 	char dif_level[CHARBUFF];    //難易度名
-	double fall_speed;           //ミノの落下スピード
-	int Imino_num;               //Iミノの出現番号
-	int Zmino_num;               //Zミノの出現番号
 	int result_row;              //消去した行数
 	int Imino_cnt;               //Iミノを操作した数
 	int Omino_cnt;               //Oミノを操作した数
@@ -64,6 +61,6 @@ struct Game {
 	int Tmino_cnt;               //Tミノを操作した数
 };
 
-void setDifficulty(Game *data);    //難易度による設定
-void makeFrame(int height, int width);   //ゲーム画面枠の描画
-void outputResult(const char* fileName, Game data);  //結果の出力
+void makeFrame(int height, int width);                //ゲーム画面枠の描画
+void updateMinoData(Game* data);                      //消去したミノの数を更新
+void outputResult(const char* fileName, Game data);   //結果の出力
