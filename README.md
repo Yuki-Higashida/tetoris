@@ -18,6 +18,6 @@ I don't test environments under Linux and Mac.
 # Author
 
 * Limi
-* Twitter : https://twitter.com/g4cy_
+* [Twitter] : (https://twitter.com/g4cy_)
 
 Thank you for reading
