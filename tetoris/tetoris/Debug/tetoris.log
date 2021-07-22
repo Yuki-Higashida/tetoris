@@ -1,0 +1,7 @@
+﻿  tetoris.cpp
+C:\Program Files (x86)\Windows Kits\10\Include\10.0.19041.0\um\wincontypes.h(103,1): warning C4005: 'MOUSE_MOVED': マクロが再定義されました。
+C:\Users\Limit\source\repos\tetoris\PDCursesLib\include\curses.h(189): message : 'MOUSE_MOVED' の以前の定義を確認してください
+C:\Users\Limit\source\repos\tetoris\tetoris\tetoris.cpp(91,12): warning C4101: 'j': ローカル変数は 1 度も使われていません。
+C:\Users\Limit\source\repos\tetoris\tetoris\tetoris.cpp(91,9): warning C4101: 'i': ローカル変数は 1 度も使われていません。
+C:\Users\Limit\source\repos\tetoris\tetoris\tetoris.cpp(747,9): warning C4101: 'tmp': ローカル変数は 1 度も使われていません。
+  tetoris.vcxproj -> C:\Users\Limit\source\repos\tetoris\Debug\tetoris.exe
